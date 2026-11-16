@@ -79,7 +79,7 @@ describe("lessonNoteStatus", () => {
   it("surfaces the error from the last save", () => {
     expect(
       lessonNoteStatus(
-        state({ draft: "Draft ", error: { message: "Nope", draft: "Draft" } })
+        state({ draft: "Draft ", error: { message: "Nope", draft: "Draft\n" } })
       )
     ).toEqual({
       status: { kind: "error", message: "Nope" },
