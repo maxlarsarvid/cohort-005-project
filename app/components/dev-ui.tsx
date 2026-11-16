@@ -113,6 +113,9 @@ export function DevUI({ users, currentUser, devCountry, countryTierInfo, countri
                   key={user.id}
                   method="post"
                   action={`/api/switch-user?redirectTo=${encodeURIComponent(location.pathname + location.search)}`}
+                  // DevUI lives in the root layout and survives the redirect,
+                  // so `open` must be reset by hand or the list stays open.
+                  onSubmit={() => setOpen(false)}
                 >
                   <input type="hidden" name="userId" value={user.id} />
                   <button
