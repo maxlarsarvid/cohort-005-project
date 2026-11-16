@@ -4,6 +4,7 @@ export type NoteStatus =
   | { kind: "saving" }
   | { kind: "error"; message: string }
   | { kind: "too-long"; over: number }
+  | { kind: "blank" }
   | { kind: "unsaved" }
   | { kind: "saved"; updatedAt: string }
   | { kind: "empty" };
@@ -14,8 +15,11 @@ export type NoteState = {
   /** What is in the textarea now. */
   draft: string;
   saving: boolean;
-  /** The error the last save came back with, if it failed. */
-  error: string | undefined;
+  /**
+   * The error the last save came back with, and the draft it was for. Once
+   * the Student edits the draft, the error no longer describes it.
+   */
+  error: { message: string; draft: string } | undefined;
 };
 
 export function describeNote(state: NoteState): {
@@ -38,7 +42,10 @@ function statusOf(
 ): NoteStatus {
   if (state.saving) return { kind: "saving" };
   if (over > 0) return { kind: "too-long", over };
-  if (state.error) return { kind: "error", message: state.error };
+  if (state.error && state.error.draft.trim() === state.draft.trim()) {
+    return { kind: "error", message: state.error.message };
+  }
+  if (changed && state.draft.trim().length === 0) return { kind: "blank" };
   if (changed) return { kind: "unsaved" };
   if (state.saved) return { kind: "saved", updatedAt: state.saved.updatedAt };
   return { kind: "empty" };

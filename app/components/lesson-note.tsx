@@ -17,11 +17,13 @@ export function LessonNote({
 }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const [draft, setDraft] = useState(note?.body ?? "");
+  const [submittedDraft, setSubmittedDraft] = useState("");
+  const error = fetcher.data?.error;
   const { status, canSave } = lessonNoteStatus({
     saved: note,
     draft,
     saving: fetcher.state !== "idle",
-    error: fetcher.data?.error,
+    error: error ? { message: error, draft: submittedDraft } : undefined,
   });
 
   return (
@@ -33,6 +35,7 @@ export function LessonNote({
 
       <fetcher.Form
         method="post"
+        onSubmit={() => setSubmittedDraft(draft)}
         className="rounded-lg border bg-muted/30 transition-colors focus-within:border-ring focus-within:bg-background"
       >
         <input type="hidden" name="intent" value="save-note" />
@@ -45,19 +48,31 @@ export function LessonNote({
           placeholder="Jot down what you want to remember from this lesson…"
           className="min-h-28 resize-y border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
-        <div className="flex items-center justify-between gap-3 border-t px-4 py-2">
-          <NoteStatusLine status={status} />
-          <Button
-            type="submit"
-            size="sm"
-            variant={canSave ? "default" : "ghost"}
-            disabled={!canSave}
-          >
-            {status.kind === "saving" ? "Saving..." : "Save note"}
-          </Button>
-        </div>
+        <NoteSaveBar status={status} canSave={canSave} />
       </fetcher.Form>
     </section>
+  );
+}
+
+function NoteSaveBar({
+  status,
+  canSave,
+}: {
+  status: NoteStatus;
+  canSave: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-t px-4 py-2">
+      <NoteStatusLine status={status} />
+      <Button
+        type="submit"
+        size="sm"
+        variant={canSave ? "default" : "ghost"}
+        disabled={!canSave}
+      >
+        {status.kind === "saving" ? "Saving..." : "Save note"}
+      </Button>
+    </div>
   );
 }
 
@@ -80,10 +95,13 @@ function NoteHeading() {
 }
 
 function NoteStatusLine({ status }: { status: NoteStatus }) {
-  const failed = status.kind === "error" || status.kind === "too-long";
+  const failed =
+    status.kind === "error" ||
+    status.kind === "too-long" ||
+    status.kind === "blank";
   return (
     <span
-      role={failed ? "alert" : undefined}
+      aria-live="polite"
       suppressHydrationWarning
       className={cn(
         "text-xs",
@@ -98,11 +116,13 @@ function NoteStatusLine({ status }: { status: NoteStatus }) {
 function statusText(status: NoteStatus): string {
   switch (status.kind) {
     case "saving":
-      return "Saving…";
+      return "Saving...";
     case "error":
       return status.message;
     case "too-long":
       return `${status.over.toLocaleString("en")} characters over the limit`;
+    case "blank":
+      return "Write something before saving your note.";
     case "unsaved":
       return "Unsaved changes";
     case "saved":

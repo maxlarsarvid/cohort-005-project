@@ -57,24 +57,45 @@ describe("lessonNoteStatus", () => {
     );
   });
 
-  it("will not save an emptied Note, which the server rejects", () => {
-    expect(lessonNoteStatus(state({ saved, draft: "" }))).toEqual({
-      status: { kind: "unsaved" },
+  it("says why an emptied Note will not save, as the server rejects it", () => {
+    expect(lessonNoteStatus(state({ saved, draft: " \n" }))).toEqual({
+      status: { kind: "blank" },
       canSave: false,
     });
   });
 
   it("reports saving and blocks a second save meanwhile", () => {
     expect(
-      lessonNoteStatus(state({ draft: "Draft", saving: true, error: "old" }))
+      lessonNoteStatus(
+        state({
+          draft: "Draft",
+          saving: true,
+          error: { message: "old", draft: "Draft" },
+        })
+      )
     ).toEqual({ status: { kind: "saving" }, canSave: false });
   });
 
   it("surfaces the error from the last save", () => {
-    expect(lessonNoteStatus(state({ draft: "Draft", error: "Nope" }))).toEqual({
+    expect(
+      lessonNoteStatus(
+        state({ draft: "Draft ", error: { message: "Nope", draft: "Draft" } })
+      )
+    ).toEqual({
       status: { kind: "error", message: "Nope" },
       canSave: true,
     });
+  });
+
+  it("drops the error once the Student edits the draft it was for", () => {
+    expect(
+      lessonNoteStatus(
+        state({
+          draft: "Draft, fixed",
+          error: { message: "Nope", draft: "Draft" },
+        })
+      )
+    ).toEqual({ status: { kind: "unsaved" }, canSave: true });
   });
 
   it("accepts a draft of exactly the maximum length", () => {
@@ -87,7 +108,9 @@ describe("lessonNoteStatus", () => {
 
   it("says how far over the limit a draft is, and will not save it", () => {
     const draft = "a".repeat(MAX_NOTE_LENGTH + 3);
-    expect(lessonNoteStatus(state({ draft, error: "old" }))).toEqual({
+    expect(
+      lessonNoteStatus(state({ draft, error: { message: "old", draft } }))
+    ).toEqual({
       status: { kind: "too-long", over: 3 },
       canSave: false,
     });
