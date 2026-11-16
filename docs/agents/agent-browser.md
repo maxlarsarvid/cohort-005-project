@@ -12,6 +12,8 @@ npm install -g agent-browser
 agent-browser install
 ```
 
+The agent workflows in `.github/workflows/` install it already.
+
 ## Asking your own question
 
 Start the app with `npm run dev` first. The examples below use
@@ -51,6 +53,23 @@ change you are reporting on trust.
 
 Screenshots are PR evidence: a before and an after for a change that shows in
 the UI.
+
+## Signing in
+
+A fresh browser has no user, so most pages show the signed-out view. Sign in
+through the same endpoint the DevUI panel uses. Look the user up by email:
+seed ids depend on insert order.
+
+```bash
+# Emma Wilson: a student enrolled in introduction-to-typescript.
+# Others: alex.rivera@ralph.dev (admin), sarah.chen@ralph.dev (instructor).
+ID=$(sqlite3 data.db "select id from users where email='emma.wilson@student.dev'")
+agent-browser open http://localhost:5173/courses
+agent-browser eval "fetch('/api/switch-user', {method:'POST', body: new URLSearchParams({userId:'$ID'})}).then(r=>r.status)"
+```
+
+The session is a cookie in that browser. `agent-browser close`, or anything
+that relaunches the browser, signs you out: sign in again.
 
 ## Two things that will bite you
 

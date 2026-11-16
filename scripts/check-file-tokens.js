@@ -1,8 +1,10 @@
 // Fails when a file is too big for an agent to read and edit in one go.
 // Tokens are estimated as bytes / 4, which is close enough for code.
-// Usage: node scripts/check-file-tokens.js <file>...
+// Usage: node scripts/check-file-tokens.js [file...]
+// With no files, it checks every file git tracks (what `npm run check` does).
 
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { readFileSync, statSync } from "node:fs";
 
 const MAX_TOKENS = 5000;
 const BYTES_PER_TOKEN = 4;
@@ -15,28 +17,61 @@ const IGNORED = [
   /^\.github\/workflows\/[^/]+\.yml$/,
 ];
 
+// Files that were already over the limit when this check arrived. Each may
+// stay at or under the size recorded here, so a change can touch it without
+// splitting it, but may not grow it. Each has an issue to split it. Lower an
+// entry when its file shrinks, and remove it once the file is split.
+const LEGACY = {
+  "app/lib/refunds.server.test.ts": 6267,
+  "app/lib/refunds.server.ts": 6390,
+  "app/modules/instructor-analytics/lib/instructor-analytics.ts": 8032,
+  "app/modules/instructor-analytics/tests/instructor-analytics.test.ts": 9309,
+  "app/routes/courses.$slug.lessons.$lessonId.tsx": 14201,
+  "app/routes/courses.$slug.tsx": 8807,
+  "app/routes/instructor.$courseId.lessons.$lessonId.quiz.tsx": 8767,
+  "app/routes/instructor.$courseId.tsx": 17799,
+  "app/routes/instructor.analytics.tsx": 9832,
+  "request-logger/README.md": 5104,
+  "request-logger/agents.test.ts": 13654,
+  "request-logger/agents.ts": 13685,
+  "request-logger/proxy.ts": 5404,
+  "request-logger/render.ts": 7464,
+  "scripts/seed.ts": 23214,
+};
+
 const isBinary = (contents) => contents.subarray(0, 8000).includes(0);
 
-const oversized = process.argv
-  .slice(2)
+const args = process.argv.slice(2);
+const files =
+  args.length > 0
+    ? args
+    : execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+        .split("\0")
+        .filter(Boolean);
+
+const oversized = files
   .map((file) => file.replaceAll("\\", "/").replace(`${process.cwd()}/`, ""))
   .filter((file) => !IGNORED.some((pattern) => pattern.test(file)))
+  .filter((file) => statSync(file, { throwIfNoEntry: false })?.isFile())
   .map((file) => ({ file, contents: readFileSync(file) }))
   .filter(({ contents }) => !isBinary(contents))
   .map(({ file, contents }) => ({
     file,
     tokens: Math.ceil(contents.length / BYTES_PER_TOKEN),
+    limit: LEGACY[file] ?? MAX_TOKENS,
   }))
-  .filter(({ tokens }) => tokens > MAX_TOKENS);
+  .filter(({ tokens, limit }) => tokens > limit);
 
 if (oversized.length > 0) {
-  console.error(`These files are over ${MAX_TOKENS} tokens (bytes / 4):\n`);
-  for (const { file, tokens } of oversized) {
-    console.error(`  ${file}: ~${tokens} tokens`);
+  console.error(`These files are over their token limit (bytes / 4):\n`);
+  for (const { file, tokens, limit } of oversized) {
+    const legacy = file in LEGACY ? ", a legacy file that may not grow" : "";
+    console.error(`  ${file}: ~${tokens} tokens (limit ${limit}${legacy})`);
   }
   console.error(`
-Split each file before you commit. Do not delete code or squash it onto fewer
-lines to get under the limit.
+A legacy file has an issue to split it. Bring it back to its recorded size
+rather than splitting it inside an unrelated change. Split any other file.
+Do not delete code or squash it onto fewer lines to get under the limit.
 
 How to split:
 - Find the seams. Look for groups of functions, components, or tests that
